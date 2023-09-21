@@ -1,5 +1,8 @@
 import express, { Request, Response } from "express";
 import {Ad} from "./types";
+import sqlite3 from 'sqlite3';
+const db = new sqlite3.Database('db.sqlite');
+
 
 const app = express();
 const port = 3000;
@@ -40,7 +43,11 @@ app.get("/", (req: Request, res: Response) => {
 
   
 app.get("/ads", (req: Request, res: Response) => {
-  res.send(ads)
+  // res.send(ads)
+  db.all('SELECT * FROM ad', (err, rows) => {
+    if(!err) res .send(rows);
+      else res.sendStatus(500);
+  })
 })
 
 
@@ -51,11 +58,15 @@ const newAd : Ad = {
     id, 
     createdAt : new Date().toISOString(),
 };
-    ads.push(req.body)
+    // ads.push(req.body)
+    db.run('SELECT INTO ad (title, owner) VALUES ($title,$owner)',{
+      $title: req.body.title,
+      $owner: req.body.owner,
+    })
     res.send(newAd)
 })
  
-  
+ 
 
 app.delete ("/ads/:id", (req: Request, res: Response) => {
     const idOfAdToDelete = parseInt(req.params.id, 10)
