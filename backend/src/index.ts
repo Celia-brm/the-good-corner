@@ -1,118 +1,79 @@
+import"reflect-metadata" //a mettre le plus haut possible
 import express, { Request, Response } from "express";
-import {Ad} from "./types";
-import sqlite3 from 'sqlite3';
-const db = new sqlite3.Database('db.sqlite');
+import {Ad} from "./entities/ad";
+import { Validate } from "class-validator";
+// import sqlite3 from 'sqlite3';
+import db from "./db";
 
+// const db = new sqlite3.Database("the_good_corner.sqlite");
 
 const app = express();
 const port = 3000;
 
-
- let ads: Ad [] = [
-    {
-      id: 1,
-      title: "Bike to sell",
-      description:
-        "My bike is blue, working fine. I'm selling it because I've got a new one",
-      owner: "bike.seller@gmail.com",
-      price: 100,
-      picture:
-        "https://images.lecho.be/view?iid=dc:113129565&context=ONLINE&ratio=16/9&width=640&u=1508242455000",
-      location: "Paris",
-      createdAt: "2023-09-05T10:13:14.755Z",
-    },
-    {
-      id: 2,
-      title: "Car to sell",
-      description:
-        "My car is blue, working fine. I'm selling it because I've got a new one",
-      owner: "car.seller@gmail.com",
-      price: 10000,
-      picture:
-        "https://www.automobile-magazine.fr/asset/cms/34973/config/28294/apres-plusieurs-prototypes-la-bollore-bluecar-a-fini-par-devoiler-sa-version-definitive.jpg",
-      location: "Paris",
-      createdAt: "2023-10-05T10:14:15.922Z",
-    },
-  ];
-
 app.use(express.json());
 
 app.get("/", (req: Request, res: Response) => {
-    res.send(ads)
+    res.send("Hello world !")
 })
 
   
-app.get("/ads", (req: Request, res: Response) => {
-  // res.send(ads)
-  db.all('SELECT * FROM ad', (err, rows) => {
-    if(!err) res .send(rows);
-      else res.sendStatus(500);
-  })
-})
+app.get("/ads", async (req: Request, res: Response) => {
 
-
-app.post("/ads", (req: Request, res: Response) => {
-const id = ads.length + 1;
-const newAd : Ad = {
-    ...req.body,
-    id, 
-    createdAt : new Date().toISOString(),
-};
-    // ads.push(req.body)
-    db.run('SELECT INTO ad (title, owner) VALUES ($title,$owner)',{
-      $title: req.body.title,
-      $owner: req.body.owner,
-    })
-    res.send(newAd)
-})
- 
- 
-
-app.delete ("/ads/:id", (req: Request, res: Response) => {
-    const idOfAdToDelete = parseInt(req.params.id, 10)
-    if(!ads.find((ad) => ad.id !== idOfAdToDelete )) return res.sendStatus(404);
-    
-    /*ads = ads.filter((ad) => ad.id !== idOfAdToDelete)
-    }*/
-
-    ads.splice(
-        ads.findIndex((ad) => ad.id === idOfAdToDelete)
-    );
-    res.sendStatus(204).send({message :"ad deleted !"})
-})
-
-
-app.patch("/ads/:id",(req: Request, res: Response) => {
-    const idOfAdToUpdate = parseInt(req.params.id, 10)
-    if(!ads.find((ad) => ad.id === idOfAdToUpdate )) return res.sendStatus(404);
-    
-    //imperative way
-    const indexOfAdToUpdate = ads.findIndex((ad) => ad.id === idOfAdToUpdate);
-    console.log(indexOfAdToUpdate)
-      /* ads [indexOfAdToUpdate] ={
-        ...ads[indexOfAdToUpdate],
-         ...req.body,
-      } */
-
-    //declarative way
-    ads = ads.map((ad)=> {
-      if (ad.id === idOfAdToUpdate) return {...ad, ...req.body}
-      else return ad;
-    });
-    res.send(ads[indexOfAdToUpdate]);
-})
-
-
-app.get("/ads/:id", (request, response) => {
-  const id = parseInt(request.params.id);
-  const ad = ads.find((ad) => ad.id === id);
-  if (!ad) {
-    response.sendStatus(404);
+  try {
+    // const ads = await Ad.find()
+    const newAd = Ad.create(req.body)
+    res.send(await newAd.save())
+  }catch (err){
+    console.log(err);
+    res.sendStatus(500);
   }
-  response.json({ ad });
 });
 
 
-app.listen(port, () => {
+app.post("/ads", async (req: Request, res: Response) => {
+  try {
+  const newAd = Ad.create(req.body);
+  const errors = Validate(newAd);
+
+  console.log({errors});
+  if(!errors) return res.status(422).send({errors});
+
+  const newAdWithId = await newAd.save();
+  res.send(newAdWithId)
+  }catch (err){
+    console.log(err);
+    res.sendStatus(500);
+  }
+  }); 
+ 
+app.delete("/ads/:id", async (req: Request, res: Response) => {
+  try{
+    const adToDelete = await Ad.findOneBy({id:parseInt(req.params.id, 10)});
+    if(!adToDelete) return res.sendStatus(404);
+    await adToDelete.remove();
+    res.sendStatus(204);
+  } catch (err){
+      console.log(err);
+      res.sendStatus(500);
+  }
+  
+});
+
+app.patch("/ads/:id", async (req: Request, res: Response) => {
+  try{  
+    const adToUpdate = await Ad.findOneBy({id:parseInt(req.params.id, 10)});
+    if(!adToUpdate) return res.sendStatus(404);
+    await Ad.update(parseInt(req.params.id, 10), req.body);
+    await Ad.merge(adToUpdate, req.body);      
+    res.send(await adToUpdate.save());
+  } catch (err){
+      console.log(err);
+      res.sendStatus(500);
+  }
+ 
+});
+
+app.listen(port, async () => {
+  await db.initialize();
     console.log(`Example app listening on port ${port}`)
 });
